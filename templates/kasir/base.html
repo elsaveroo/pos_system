@@ -1,0 +1,363 @@
+{% load static %}<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{% block title %}POS System{% endblock %}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{% static 'css/main.css' %}">
+<style>
+/* ══ SIDEBAR COLLAPSED ═══════════════════════════════════════════ */
+.sidebar { transition: width .25s ease; }
+.sidebar.collapsed { width: 64px !important; overflow: visible; }
+.sidebar.collapsed .sidebar-header { padding: 12px 0; justify-content: center; position: relative; overflow: visible; }
+.sidebar.collapsed .brand-text { display: none; }
+.sidebar.collapsed .brand-logo { justify-content: center; }
+/* Toggle button floats outside when collapsed */
+.sidebar.collapsed .sidebar-toggle {
+  position: absolute; right: -14px; top: 50%; transform: translateY(-50%);
+  background: var(--card-bg); border: 1.5px solid var(--border); border-radius: 50%;
+  width: 28px; height: 28px; display: flex !important; align-items: center; justify-content: center;
+  box-shadow: 0 2px 8px rgba(0,0,0,.12); z-index: 20; padding: 0;
+}
+.sidebar.collapsed .sidebar-toggle svg { transform: rotate(180deg); width: 14px; height: 14px; }
+.sidebar.collapsed .nav-item { justify-content: center; padding: 10px 0; }
+.sidebar.collapsed .nav-item span { display: none; }
+.sidebar.collapsed .nav-item:hover::after {
+  content: attr(data-label); position: absolute; left: calc(100% + 8px); top: 50%;
+  transform: translateY(-50%); background: #1e293b; color: #fff;
+  padding: 5px 10px; border-radius: 7px; font-size: 12px; white-space: nowrap;
+  pointer-events: none; z-index: 9999; box-shadow: 0 4px 12px rgba(0,0,0,.2);
+}
+.sidebar.collapsed .dark-mode-row { justify-content: center; padding: 10px 0; }
+.sidebar.collapsed .dark-mode-row span,
+.sidebar.collapsed .dark-mode-row .toggle-switch { display: none; }
+.sidebar.collapsed .nav-item.logout-btn { justify-content: center; }
+.sidebar-header { position: relative; overflow: visible; }
+
+/* ── Notif dot badge ── */
+.notif-dot {
+  position: absolute; top: 2px; right: 2px; min-width: 16px; height: 16px;
+  border-radius: 8px; background: #ef4444; color: white; font-size: 9px; font-weight: 800;
+  display: flex; align-items: center; justify-content: center; padding: 0 3px;
+  border: 2px solid var(--card-bg);
+}
+
+/* ── Konfirmasi logout modal ── */
+#logoutModal {
+  position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 9999;
+  display: none; align-items: center; justify-content: center; backdrop-filter: blur(3px);
+}
+#logoutModal.show { display: flex; }
+.lm-box {
+  background: var(--card-bg); border-radius: 16px; padding: 28px 24px;
+  max-width: 340px; width: 90%; text-align: center; box-shadow: 0 20px 50px rgba(0,0,0,.25);
+  animation: popIn .2s ease;
+}
+@keyframes popIn { from { transform: scale(.9); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+.lm-icon {
+  width: 56px; height: 56px; background: #fef2f2; border-radius: 50%;
+  margin: 0 auto 14px; display: flex; align-items: center; justify-content: center;
+}
+.lm-icon svg { width: 26px; height: 26px; stroke: #ef4444; }
+.lm-box h3 { font-size: 16px; font-weight: 700; margin-bottom: 6px; }
+.lm-box p { font-size: 13px; color: var(--text-muted); margin-bottom: 20px; line-height: 1.5; }
+.lm-btns { display: flex; gap: 10px; }
+.lm-btns button {
+  flex: 1; padding: 11px; border-radius: 10px;
+  font-size: 13.5px; font-weight: 700; font-family: inherit; cursor: pointer;
+}
+.lm-cancel { background: var(--bg); color: var(--text); border: 1.5px solid var(--border); }
+.lm-cancel:hover { background: var(--border); }
+.lm-confirm { background: #ef4444; color: white; border: none; }
+.lm-confirm:hover { background: #dc2626; }
+
+/* ── QRIS/Debit input field in payment modal ── */
+.nontunai-wrap { background: var(--primary-light); border-radius: 10px; padding: 14px; margin-bottom: 8px; }
+.nontunai-info { font-size: 12.5px; color: var(--primary); margin-bottom: 10px; font-weight: 500; }
+.nontunai-input-lbl { font-size: 11px; font-weight: 700; color: var(--primary); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 6px; }
+.nontunai-input {
+  width: 100%; padding: 10px 12px; border: 1.5px solid var(--border);
+  border-radius: 8px; background: var(--card-bg); color: var(--text);
+  font-size: 14px; font-weight: 600; font-family: inherit; outline: none; letter-spacing: 1px;
+}
+.nontunai-input:focus { border-color: var(--primary); }
+.nontunai-input::placeholder { font-weight: 400; letter-spacing: 0; }
+</style>
+{% block extra_css %}{% endblock %}
+</head>
+<body>
+
+{% with url_name=request.resolver_match.url_name %}
+
+<!-- Mobile sidebar overlay -->
+<div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
+
+<!-- ── LOGOUT CONFIRM MODAL ── -->
+<div id="logoutModal">
+  <div class="lm-box">
+    <div class="lm-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+        <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/>
+        <polyline points="16 17 21 12 16 7"/>
+        <line x1="21" y1="12" x2="9" y2="12"/>
+      </svg>
+    </div>
+    <h3>Yakin mau keluar?</h3>
+    <p>Sesi kamu akan diakhiri dan kamu akan diarahkan ke halaman login.</p>
+    <div class="lm-btns">
+      <button class="lm-cancel" onclick="document.getElementById('logoutModal').classList.remove('show')">Batal</button>
+      <button class="lm-confirm" id="logoutConfirmBtn">Ya, Keluar</button>
+    </div>
+  </div>
+</div>
+
+<div class="app-layout">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <div class="brand-logo">
+        <div class="brand-icon" style="flex-shrink:0">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/>
+            <line x1="3" y1="6" x2="21" y2="6"/>
+            <path d="M16 10a4 4 0 01-8 0"/>
+          </svg>
+        </div>
+        <div class="brand-text">
+          <span class="brand-name">POS System</span>
+          <span class="brand-sub">Sistem kasir</span>
+        </div>
+      </div>
+      <button class="sidebar-toggle" id="sidebarToggle" title="Sembunyikan/tampilkan menu">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+      </button>
+    </div>
+
+    <nav class="sidebar-nav">
+      <a href="{% url 'kasir' %}" class="nav-item {% if url_name == 'kasir' %}active{% endif %}" data-label="Kasir">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+        <span>Kasir</span>
+      </a>
+      <a href="{% url 'barang_stok' %}" class="nav-item {% if url_name == 'barang_stok' %}active{% endif %}" data-label="Barang & Stok">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/></svg>
+        <span>Barang &amp; Stok</span>
+      </a>
+      <a href="{% url 'riwayat' %}" class="nav-item {% if url_name == 'riwayat' %}active{% endif %}" data-label="Riwayat Transaksi">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        <span>Riwayat Transaksi</span>
+      </a>
+      <a href="{% url 'laporan' %}" class="nav-item {% if url_name == 'laporan' %}active{% endif %}" data-label="Laporan">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+        <span>Laporan</span>
+      </a>
+      <a href="{% url 'pengeluaran' %}" class="nav-item {% if url_name == 'pengeluaran' %}active{% endif %}" data-label="Pengeluaran">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
+        <span>Pengeluaran</span>
+      </a>
+      <a href="{% url 'pengaturan' %}" class="nav-item {% if url_name == 'pengaturan' %}active{% endif %}" data-label="Pengaturan">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+        <span>Pengaturan</span>
+      </a>
+    </nav>
+
+    <div class="sidebar-footer">
+      <div class="dark-mode-row">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
+        <span>Mode Tampilan</span>
+        <button class="toggle-switch" id="darkToggle" onclick="toggleDark()"></button>
+      </div>
+      <button onclick="showLogoutConfirm()" class="nav-item logout logout-btn" data-label="Keluar"
+              style="width:100%;text-align:left;background:none;border:none;font-family:inherit;cursor:pointer">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        <span>Keluar</span>
+      </button>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <div class="main-wrapper">
+    <header class="topbar">
+      <div class="topbar-left">
+        <button class="mobile-menu-btn" id="mobileMenuBtn" onclick="toggleMobileSidebar()" aria-label="Menu">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        </button>
+        <div>
+          <h1 class="page-title">{% block page_title %}{% endblock %}</h1>
+          <p class="page-sub">{% block page_sub %}{% endblock %}</p>
+        </div>
+      </div>
+      <div class="topbar-right">
+        <!-- NOTIFICATION BELL -->
+        <div class="notif-wrap" id="notifWrap">
+          <button class="notif-btn" id="notifBtn" onclick="toggleNotif()" style="position:relative">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
+            <span class="notif-dot" id="notifDot" style="display:none">0</span>
+          </button>
+          <div class="notif-panel" id="notifPanel" style="display:none">
+            <div class="notif-header">
+              <span>Notifikasi</span>
+              <button onclick="markAllRead()" style="font-size:11px;color:var(--primary);background:none;border:none;cursor:pointer;font-weight:600">Tandai semua dibaca</button>
+            </div>
+            <div id="notifList"><div style="text-align:center;padding:20px;color:var(--text-muted);font-size:13px">Memuat...</div></div>
+          </div>
+        </div>
+        <div class="time-badge"><span class="lbl">Waktu</span><span class="val" id="clock">--:--:-- WIB</span></div>
+        <div class="user-badge">
+          <div class="user-avatar">{{ request.user.get_full_name|default:request.user.username|slice:":2"|upper }}</div>
+          <div><span class="uname">{{ request.user.get_full_name|default:request.user.username }}</span><span class="urole">{% if request.user.is_staff %}Admin{% else %}Kasir{% endif %}</span></div>
+        </div>
+      </div>
+    </header>
+    <main class="page-content">{% block content %}{% endblock %}</main>
+  </div>
+</div>
+
+{% endwith %}
+
+<!-- TOAST -->
+<div class="toast" id="toast">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+  <span id="toastMsg">Berhasil</span>
+</div>
+
+<script src="{% static 'js/main.js' %}"></script>
+<script>
+// ── Mobile sidebar ─────────────────────────────────────────────────────────
+function toggleMobileSidebar() {
+  document.getElementById('sidebar').classList.toggle('mobile-open');
+  document.getElementById('sidebarOverlay').classList.toggle('show');
+}
+function closeSidebar() {
+  document.getElementById('sidebar').classList.remove('mobile-open');
+  document.getElementById('sidebarOverlay').classList.remove('show');
+}
+document.addEventListener('DOMContentLoaded', function() {
+  document.querySelectorAll('.nav-item').forEach(function(el) {
+    el.addEventListener('click', function() { if (window.innerWidth <= 768) closeSidebar(); });
+  });
+});
+
+// ── Sidebar toggle (desktop: collapse/expand, mobile: off-canvas) ─────────
+(function() {
+  function initSidebar() {
+    var sb  = document.getElementById('sidebar');
+    var btn = document.getElementById('sidebarToggle');
+    if (!sb || !btn) return;
+    // Restore collapsed state on desktop
+    if (window.innerWidth > 768 && localStorage.getItem('sidebarCollapsed') === '1') {
+      sb.classList.add('collapsed');
+    }
+    btn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      if (window.innerWidth <= 768) {
+        // Mobile: toggle off-canvas
+        sb.classList.toggle('mobile-open');
+        document.getElementById('sidebarOverlay').classList.toggle('show', sb.classList.contains('mobile-open'));
+      } else {
+        // Desktop: toggle collapsed
+        sb.classList.toggle('collapsed');
+        localStorage.setItem('sidebarCollapsed', sb.classList.contains('collapsed') ? '1' : '0');
+      }
+    });
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initSidebar);
+  } else {
+    initSidebar();
+  }
+})();
+
+// ── Logout konfirmasi ──────────────────────────────────────────────────────
+function showLogoutConfirm() {
+  document.getElementById('logoutModal').classList.add('show');
+}
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('logoutConfirmBtn').addEventListener('click', () => {
+    window.location.href = '{% url "logout" %}';
+  });
+  document.getElementById('logoutModal').addEventListener('click', function(e) {
+    if (e.target === this) this.classList.remove('show');
+  });
+});
+
+// ── Notifikasi ─────────────────────────────────────────────────────────────
+// notifReadSet: set of notif IDs that have been read, persisted in localStorage
+let notifReadSet = new Set(JSON.parse(localStorage.getItem('notifRead') || '[]'));
+let _lastNotifs = [];
+
+async function loadNotif() {
+  try {
+    const res  = await fetch('/api/notifikasi/');
+    const data = await res.json();
+    _lastNotifs = data.notif || [];
+    renderNotif(_lastNotifs);
+  } catch(e) {
+    document.getElementById('notifList').innerHTML =
+      '<div style="text-align:center;padding:20px;color:var(--text-muted);font-size:13px">Gagal memuat notifikasi</div>';
+  }
+}
+
+function renderNotif(notifs) {
+  // Count genuinely unread
+  const unread = notifs.filter(n => !notifReadSet.has(n.id));
+  const dot = document.getElementById('notifDot');
+  if (unread.length > 0) {
+    dot.style.display = 'flex';
+    dot.textContent = unread.length > 9 ? '9+' : String(unread.length);
+  } else {
+    dot.style.display = 'none';
+  }
+
+  const colors = { warning: '#f59e0b', error: '#ef4444', info: '#1a56db', success: '#10b981' };
+  if (!notifs.length) {
+    document.getElementById('notifList').innerHTML =
+      '<div style="text-align:center;padding:24px;color:var(--text-muted);font-size:13px">✅ Tidak ada notifikasi</div>';
+    return;
+  }
+  document.getElementById('notifList').innerHTML = notifs.map(n => {
+    const read = notifReadSet.has(n.id);
+    return `<div class="notif-item${read ? ' read' : ''}" data-nid="${n.id}">
+      <div class="notif-dot-inline" style="background:${colors[n.type]||'#1a56db'};width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-top:5px"></div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:12.5px;font-weight:${read?'400':'600'};line-height:1.4">${n.msg}</div>
+        ${n.time ? `<div style="font-size:11px;color:var(--text-muted);margin-top:2px">${n.time}</div>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function markAllRead() {
+  // Add all current notif IDs to read set
+  _lastNotifs.forEach(n => notifReadSet.add(n.id));
+  localStorage.setItem('notifRead', JSON.stringify([...notifReadSet]));
+  // Hide badge immediately
+  document.getElementById('notifDot').style.display = 'none';
+  // Re-render to show all as read
+  renderNotif(_lastNotifs);
+  showToast('Semua notifikasi ditandai dibaca ✓');
+}
+
+function toggleNotif() {
+  const panel = document.getElementById('notifPanel');
+  const open  = panel.style.display !== 'none';
+  panel.style.display = open ? 'none' : 'block';
+  if (!open) loadNotif();
+}
+
+document.addEventListener('click', e => {
+  const wrap = document.getElementById('notifWrap');
+  if (wrap && !wrap.contains(e.target))
+    document.getElementById('notifPanel').style.display = 'none';
+});
+
+// Load badge count on page load (no panel open)
+window.addEventListener('DOMContentLoaded', () => loadNotif());
+
+// Kategori default dibuat otomatis di server-side (views.py)
+</script>
+{% block extra_js %}{% endblock %}
+</body>
+</html>

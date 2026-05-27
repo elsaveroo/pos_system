@@ -1,0 +1,518 @@
+{% extends 'kasir/base.html' %}
+{% block title %}Pengaturan Toko{% endblock %}
+{% block page_title %}Pengaturan Toko{% endblock %}
+{% block page_sub %}Konfigurasi sistem dan preferensi toko{% endblock %}
+{% block content %}
+<div class="inner-page">
+
+  {% if messages %}
+  {% for m in messages %}
+  <div class="alert {% if m.tags == 'success' %}alert-success{% else %}alert-danger{% endif %}" style="margin-bottom:12px">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>{{ m }}
+  </div>
+  {% endfor %}
+  {% endif %}
+
+  <div class="page-tabs">
+    <button class="ptab {% if tab == 'profil' %}active{% endif %}" onclick="showTab('profil',this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>Profil Toko
+    </button>
+    <button class="ptab {% if tab == 'struk' %}active{% endif %}" onclick="showTab('struk',this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>Struk &amp; Pajak
+    </button>
+    <button class="ptab {% if tab == 'pengguna' %}active{% endif %}" onclick="showTab('pengguna',this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>Pengguna
+    </button>
+    <button class="ptab {% if tab == 'data' %}active{% endif %}" onclick="showTab('data',this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>Data
+    </button>
+  </div>
+
+  <!-- ── PROFIL TOKO ── -->
+  <div id="tab-profil" {% if tab != 'profil' %}style="display:none"{% endif %}>
+    <form method="post" action="{% url 'simpan_profil' %}" enctype="multipart/form-data">
+      {% csrf_token %}
+      <div class="section-box">
+        <div class="section-title">Informasi Toko</div>
+        <div class="form-group">
+          <label class="form-label">Nama toko <span class="req">*</span></label>
+          <input class="form-control" name="nama_toko" value="{{ setting.nama_toko }}" placeholder="Nama toko" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Alamat lengkap</label>
+          <textarea class="form-control" name="alamat" placeholder="Alamat toko" rows="2">{{ setting.alamat }}</textarea>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Nomor telepon</label>
+            <input class="form-control" name="telepon" value="{{ setting.telepon }}" placeholder="+62...">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Nomor WhatsApp</label>
+            <input class="form-control" name="whatsapp" value="{{ setting.whatsapp }}" placeholder="+62...">
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">NPWP (opsional)</label>
+          <input class="form-control" name="npwp" value="{{ setting.npwp }}" placeholder="00.000.000.0-000.000">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Logo toko
+            <span style="font-size:11px;color:var(--text-muted);font-weight:400;margin-left:6px">
+              — ditampilkan di struk cetak &amp; header halaman login
+            </span>
+          </label>
+          <div class="upload-area" onclick="document.getElementById('logoInp').click()">
+            <div class="upload-icon">
+              {% if setting.logo %}
+              <img src="{{ setting.logo.url }}" style="width:48px;height:48px;border-radius:8px;object-fit:cover" id="logoPreview">
+              {% else %}
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" id="logoPreview" style="width:36px;height:36px"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+              {% endif %}
+            </div>
+            <div class="upload-info" id="logoLabel">
+              {% if setting.logo %}Logo terpasang — klik untuk ganti{% else %}Klik untuk upload logo<br>Format: JPG, PNG, SVG — Maks 2MB{% endif %}
+            </div>
+          </div>
+          <input type="file" id="logoInp" name="logo" accept="image/*" style="display:none" onchange="previewLogo(this)">
+
+        <div class="form-group" style="margin-top:16px">
+          <label class="form-label">QR Code QRIS
+            <span style="font-size:11px;color:var(--text-muted);font-weight:400;margin-left:6px">
+              — ditampilkan ke pelanggan saat pembayaran QRIS
+            </span>
+          </label>
+          <div class="upload-area" onclick="document.getElementById('qrisInp').click()">
+            <div class="upload-icon">
+              {% if setting.qris_image %}
+                <img src="{{ setting.qris_image.url }}" style="width:48px;height:48px;border-radius:8px;object-fit:contain;background:#fff;padding:4px" id="qrisPreview">
+              {% else %}
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:32px;height:32px" id="qrisPreview"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="3" height="3"/></svg>
+              {% endif %}
+            </div>
+            <div class="upload-info" id="qrisLabel">
+              {% if setting.qris_image %}QR QRIS terpasang — klik untuk ganti{% else %}Upload QR code QRIS dari aplikasi bank/dompet digital kamu<br>Format: JPG atau PNG{% endif %}
+            </div>
+          </div>
+          <input type="file" id="qrisInp" name="qris_image" accept="image/*" style="display:none" onchange="previewQris(this)">
+        </div>
+        </div>
+      </div>
+      <button type="submit" class="btn btn-primary">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:15px;height:15px"><polyline points="20 6 9 17 4 12"/></svg>
+        Simpan Profil Toko
+      </button>
+    </form>
+  </div>
+
+  <!-- ── STRUK & PAJAK ── -->
+  <div id="tab-struk" {% if tab != 'struk' %}style="display:none"{% endif %}>
+    <form method="post" action="{% url 'simpan_struk' %}">
+      {% csrf_token %}
+
+      <!-- Pajak -->
+      <div class="section-box">
+        <div class="section-title">Pengaturan Pajak</div>
+        <div style="background:var(--bg);border-radius:10px;padding:14px 16px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;gap:12px">
+          <div>
+            <div style="font-weight:600">PPN {{ setting.ppn_persen|floatformat:0 }}%</div>
+            <div style="font-size:12px;color:var(--text-muted)">Aktifkan PPN secara default di setiap transaksi baru</div>
+          </div>
+          <button type="button" class="ppn-tog {% if setting.ppn_aktif %}on{% else %}off{% endif %}" id="ppnTog" onclick="toggleTog('ppnTog','ppn_aktif_inp')"></button>
+          <input type="hidden" name="ppn_aktif" id="ppn_aktif_inp" value="{% if setting.ppn_aktif %}on{% endif %}">
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Diskon Maksimal (%)</label>
+            <input class="form-control" type="number" name="diskon_maksimal" value="{{ setting.diskon_maksimal }}" min="0" max="100" placeholder="100">
+            <div style="font-size:11.5px;color:var(--text-muted);margin-top:4px">Batas diskon yang bisa diberikan kasir</div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Pembulatan Harga</label>
+            <select class="form-control" name="pembulatan">
+              <option value="none" {% if setting.pembulatan == 'none' %}selected{% endif %}>Tidak ada</option>
+              <option value="up" {% if setting.pembulatan == 'up' %}selected{% endif %}>Ke atas</option>
+              <option value="down" {% if setting.pembulatan == 'down' %}selected{% endif %}>Ke bawah</option>
+            </select>
+          </div>
+        </div>
+        <button type="submit" name="section" value="pajak" class="btn btn-outline">Simpan Pengaturan Pajak</button>
+      </div>
+
+      <!-- Nomor Transaksi -->
+      <div class="section-box">
+        <div class="section-title">Format Nomor Transaksi</div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Format nomor</label>
+            <input class="form-control" name="format_nomor" value="{{ setting.format_nomor_transaksi }}" placeholder="TRX-YYYY-{seq}">
+            <div style="font-size:11.5px;color:var(--text-muted);margin-top:4px">Gunakan YYYY=tahun, MM=bulan, DD=hari, {seq}=urutan</div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Reset nomor urut</label>
+            <select class="form-control" name="reset_nomor">
+              <option value="hari" {% if setting.reset_nomor == 'hari' %}selected{% endif %}>Setiap hari</option>
+              <option value="bulan" {% if setting.reset_nomor == 'bulan' %}selected{% endif %}>Setiap bulan</option>
+              <option value="tahun" {% if setting.reset_nomor == 'tahun' %}selected{% endif %}>Setiap tahun</option>
+              <option value="tidak" {% if setting.reset_nomor == 'tidak' %}selected{% endif %}>Tidak reset</option>
+            </select>
+          </div>
+        </div>
+        <button type="submit" name="section" value="nomor" class="btn btn-outline">Simpan Format Nomor</button>
+      </div>
+
+      <!-- Printer -->
+      <div class="section-box">
+        <div class="section-title">Pengaturan Printer</div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Ukuran Kertas</label>
+            <select class="form-control" name="ukuran_kertas">
+              <option value="thermal58" {% if setting.ukuran_kertas == 'thermal58' %}selected{% endif %}>Thermal 58mm</option>
+              <option value="thermal80" {% if setting.ukuran_kertas == 'thermal80' %}selected{% endif %}>Thermal 80mm</option>
+              <option value="thermal88" {% if setting.ukuran_kertas == 'thermal88' %}selected{% endif %}>Thermal 88mm</option>
+              <option value="a4" {% if setting.ukuran_kertas == 'a4' %}selected{% endif %}>A4</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Margin (mm)</label>
+            <input class="form-control" type="number" name="margin_printer" value="{{ setting.margin_printer }}" min="0" max="20">
+          </div>
+        </div>
+        <div style="background:var(--bg);border-radius:10px;padding:14px 16px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;gap:12px">
+          <div>
+            <div style="font-weight:600">Cetak Otomatis</div>
+            <div style="font-size:12px;color:var(--text-muted)">Cetak struk otomatis setelah transaksi selesai</div>
+          </div>
+          <button type="button" class="ppn-tog {% if setting.cetak_otomatis %}on{% else %}off{% endif %}" id="cetakTog" onclick="toggleTog('cetakTog','cetak_otomatis_inp')"></button>
+          <input type="hidden" name="cetak_otomatis" id="cetak_otomatis_inp" value="{% if setting.cetak_otomatis %}on{% endif %}">
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button type="submit" name="section" value="printer" class="btn btn-outline">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><polyline points="20 6 9 17 4 12"/></svg>
+            Simpan Pengaturan Printer
+          </button>
+          <button type="button" class="btn btn-outline" onclick="tesCetak()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+            Tes Cetak
+          </button>
+        </div>
+      </div>
+
+      <!-- Catatan struk -->
+      <div class="section-box">
+        <div class="section-title">Catatan Footer Struk</div>
+        <div class="form-group">
+          <textarea class="form-control" name="catatan_struk" rows="3" placeholder="Contoh: Terima kasih telah berbelanja! Barang yang sudah dibeli tidak dapat dikembalikan.">{{ setting.catatan_struk }}</textarea>
+        </div>
+        <button type="submit" name="section" value="catatan" class="btn btn-outline">Simpan Catatan</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- ── PENGGUNA ── -->
+  <div id="tab-pengguna" {% if tab != 'pengguna' %}style="display:none"{% endif %}>
+    <div class="section-box">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:10px">
+        <div class="section-title" style="margin:0">Daftar Pengguna</div>
+        <button class="btn btn-primary" onclick="openModal('addUserModal')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:14px;height:14px"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Tambah Pengguna
+        </button>
+      </div>
+      <div class="tbl-wrap">
+        <table>
+          <thead>
+            <tr><th>Username</th><th>Nama Lengkap</th><th>Role</th><th>Aksi</th></tr>
+          </thead>
+          <tbody>
+            {% for u in users %}
+            <tr>
+              <td><strong>{{ u.username }}</strong></td>
+              <td>{{ u.get_full_name|default:"—" }}</td>
+              <td>
+                <span class="badge {% if u.is_superuser %}badge-purple{% elif u.is_staff %}badge-blue{% else %}badge-green{% endif %}">
+                  {% if u.is_superuser %}Superuser{% elif u.is_staff %}Staff{% else %}Kasir{% endif %}
+                </span>
+              </td>
+              <td>
+                {% if u != request.user %}
+                <button class="icon-btn" title="Ganti Password" onclick="gantiPassword({{ u.id }},'{{ u.username|escapejs }}')">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+                </button>
+                <button class="icon-btn danger" title="Hapus" onclick="delUser({{ u.id }},this)">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a1 1 0 011-1h4a1 1 0 011 1v2"/></svg>
+                </button>
+                {% else %}
+                <span style="font-size:11px;color:var(--text-muted)">(Anda)</span>
+                {% endif %}
+              </td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="4" style="text-align:center;color:var(--text-muted);padding:20px">Belum ada pengguna</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── DATA ── -->
+  <div id="tab-data" {% if tab != 'data' %}style="display:none"{% endif %}>
+    <div class="section-box">
+      <div class="section-title">Ekspor Data</div>
+      <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px">Unduh data toko dalam format CSV untuk keperluan backup atau analisis.</p>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <button class="btn btn-outline" onclick="eksporTransaksiCSV()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Ekspor Transaksi CSV
+        </button>
+        <button class="btn btn-outline" onclick="eksporProdukCSV()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Ekspor Produk CSV
+        </button>
+      </div>
+    </div>
+    <div class="section-box" style="border:1px solid #fca5a5;background:var(--danger-light)">
+      <div class="section-title" style="color:var(--danger)">Zona Berbahaya</div>
+      <p style="font-size:13px;color:var(--danger);margin-bottom:14px">Tindakan berikut tidak dapat dibatalkan. Pastikan sudah melakukan backup sebelum melanjutkan.</p>
+      <button class="btn btn-danger" onclick="resetDataTrx()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg>
+        Reset Semua Data Transaksi
+      </button>
+    </div>
+  </div>
+
+</div>
+
+<!-- ADD USER MODAL -->
+<div class="modal-overlay" id="addUserModal" onclick="closeIfOut(event,'addUserModal')">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-hdr"><h3>Tambah Pengguna Baru</h3>
+      <button class="modal-close" onclick="closeModal('addUserModal')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <form method="post" action="{% url 'tambah_user' %}">
+      {% csrf_token %}
+      <div class="form-group">
+        <label class="form-label">Username <span class="req">*</span></label>
+        <input class="form-control" name="username" required placeholder="username (huruf kecil, tanpa spasi)">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Nama Lengkap</label>
+        <input class="form-control" name="full_name" placeholder="Nama lengkap">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Password <span class="req">*</span></label>
+        <input class="form-control" type="password" name="password" required placeholder="Minimal 6 karakter">
+      </div>
+      <div class="form-group" style="display:flex;align-items:center;gap:10px;background:var(--bg);padding:12px;border-radius:8px">
+        <input type="checkbox" name="is_staff" id="isStaff" style="width:16px;height:16px;cursor:pointer">
+        <div>
+          <label for="isStaff" style="font-size:13px;font-weight:600;cursor:pointer">Akses Admin/Staff</label>
+          <div style="font-size:11.5px;color:var(--text-muted)">Bisa mengakses halaman pengaturan</div>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn-so" onclick="closeModal('addUserModal')">Batal</button>
+        <button type="submit" class="btn-sp">Tambah Pengguna</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- GANTI PASSWORD MODAL -->
+<div class="modal-overlay" id="gantiPwModal" onclick="closeIfOut(event,'gantiPwModal')">
+  <div class="modal" style="max-width:380px">
+    <div class="modal-hdr"><h3>Ganti Password</h3>
+      <button class="modal-close" onclick="closeModal('gantiPwModal')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px">Ganti password untuk pengguna: <strong id="gantiPwUsername"></strong></p>
+    <div class="form-group">
+      <label class="form-label">Password Baru <span class="req">*</span></label>
+      <input class="form-control" type="password" id="newPwInput" placeholder="Password baru">
+    </div>
+    <div class="modal-actions">
+      <button class="btn-so" onclick="closeModal('gantiPwModal')">Batal</button>
+      <button class="btn-sp" onclick="submitGantiPw()">Simpan Password</button>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+{% block extra_js %}
+<script>
+const CSRF = '{{ csrf_token }}';
+let gantiPwUserId = null;
+
+function closeModal(id) { document.getElementById(id).classList.remove('show'); }
+function openModal(id) { document.getElementById(id).classList.add('show'); }
+function closeIfOut(e, id) { if (e.target.id === id) closeModal(id); }
+
+function showTab(name, btn) {
+  document.querySelectorAll('[id^="tab-"]').forEach(t => t.style.display = 'none');
+  document.getElementById('tab-' + name).style.display = '';
+  document.querySelectorAll('.ptab').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  // Update URL
+  const url = new URL(window.location);
+  url.searchParams.set('tab', name);
+  history.replaceState({}, '', url);
+}
+
+function toggleTog(togId, inpId) {
+  const tog = document.getElementById(togId);
+  const inp = document.getElementById(inpId);
+  const on = !tog.classList.contains('on');
+  tog.classList.toggle('on', on);
+  tog.classList.toggle('off', !on);
+  inp.value = on ? 'on' : '';
+}
+
+function previewQris(input) {
+  if (!input.files || !input.files[0]) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const prev = document.getElementById('qrisPreview');
+    if (prev.tagName === 'IMG') {
+      prev.src = e.target.result;
+    } else {
+      const img = document.createElement('img');
+      img.src = e.target.result;
+      img.id = 'qrisPreview';
+      img.style = 'width:48px;height:48px;border-radius:8px;object-fit:contain;background:#fff;padding:4px';
+      prev.replaceWith(img);
+    }
+    document.getElementById('qrisLabel').textContent = input.files[0].name;
+  };
+  reader.readAsDataURL(input.files[0]);
+}
+
+function previewLogo(input) {
+  if (!input.files[0]) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const prev = document.getElementById('logoPreview');
+    if (prev.tagName === 'IMG') {
+      prev.src = e.target.result;
+    } else {
+      const img = document.createElement('img');
+      img.src = e.target.result;
+      img.style = 'width:48px;height:48px;border-radius:8px;object-fit:cover';
+      img.id = 'logoPreview';
+      prev.replaceWith(img);
+    }
+    document.getElementById('logoLabel').textContent = input.files[0].name;
+  };
+  reader.readAsDataURL(input.files[0]);
+}
+
+// ── User management ────────────────────────────────────────────────────────
+async function delUser(id, btn) {
+  if (!confirmDel('Hapus pengguna ini? Tindakan ini tidak dapat dibatalkan.')) return;
+  const res = await fetch('/api/user/hapus/' + id + '/', { method: 'DELETE', headers: { 'X-CSRFToken': CSRF } });
+  const d = await res.json();
+  if (d.ok) { btn.closest('tr').remove(); showToast('Pengguna berhasil dihapus'); }
+  else showToast(d.error || 'Gagal menghapus', 'error');
+}
+
+function gantiPassword(id, username) {
+  gantiPwUserId = id;
+  document.getElementById('gantiPwUsername').textContent = username;
+  document.getElementById('newPwInput').value = '';
+  openModal('gantiPwModal');
+  setTimeout(() => document.getElementById('newPwInput').focus(), 100);
+}
+
+async function submitGantiPw() {
+  const pw = document.getElementById('newPwInput').value.trim();
+  if (!pw || pw.length < 4) { showToast('Password minimal 4 karakter', 'error'); return; }
+  const fd = new FormData();
+  fd.append('password', pw);
+  const res = await fetch('/api/user/ganti-password/' + gantiPwUserId + '/', {
+    method: 'POST', body: fd, headers: { 'X-CSRFToken': CSRF }
+  });
+  const d = await res.json();
+  if (d.ok) { closeModal('gantiPwModal'); showToast('Password berhasil diubah'); }
+  else showToast(d.error || 'Gagal', 'error');
+}
+
+// ── Tes Cetak ──────────────────────────────────────────────────────────────
+function tesCetak() {
+  const w = window.open('', '_blank', 'width=350,height=500');
+  if (!w) { showToast('Pop-up diblokir browser', 'error'); return; }
+  const toko = '{{ setting.nama_toko|escapejs }}';
+  const catatan = '{{ setting.catatan_struk|escapejs }}';
+  w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Tes Cetak</title>
+  <style>body{font-family:'Courier New',monospace;font-size:12px;padding:10px;max-width:300px;margin:0 auto}
+  h2{text-align:center;font-size:14px}p{text-align:center;font-size:11px;color:#666}
+  .hr{border-top:1px dashed #888;margin:8px 0}.row{display:flex;justify-content:space-between}
+  .footer{text-align:center;margin-top:8px;font-size:11px}</style></head><body>
+  <h2>${toko}</h2><p>TES CETAK STRUK<br>${new Date().toLocaleString('id-ID')}</p>
+  <div class="hr"></div>
+  <div class="row"><span>Produk Contoh A</span><span>Rp 10.000</span></div>
+  <div class="row"><span>Produk Contoh B</span><span>Rp 25.000</span></div>
+  <div class="hr"></div>
+  <div class="row"><span>Sub Total</span><span>Rp 35.000</span></div>
+  <div class="row"><span>PPN 11%</span><span>Rp 3.850</span></div>
+  <div class="hr"></div>
+  <div class="row" style="font-weight:bold"><span>TOTAL</span><span>Rp 38.850</span></div>
+  <div class="hr"></div>
+  <div class="footer">${catatan || 'Terima kasih!'}</div>
+  <script>window.onload=function(){window.print()}<\/script></body></html>`);
+  w.document.close();
+}
+
+// ── Ekspor Data ────────────────────────────────────────────────────────────
+async function eksporTransaksiCSV() {
+  showToast('Mengunduh data transaksi...');
+  try {
+    const res = await fetch('/api/ekspor/transaksi/');
+    if (!res.ok) throw new Error('Gagal');
+    const data = await res.json();
+    let csv = 'No Transaksi,Tanggal,Kasir,Subtotal,Diskon,PPN,Total,Metode,Status\n';
+    data.transaksi.forEach(t => {
+      csv += `"${t.nomor}","${t.tanggal}","${t.kasir}",${t.subtotal},${t.diskon},${t.ppn},${t.total},"${t.metode}","${t.status}"\n`;
+    });
+    downloadCSV(csv, 'transaksi_' + new Date().toISOString().slice(0,10) + '.csv');
+    showToast('Data transaksi berhasil diunduh!');
+  } catch(e) {
+    showToast('Gagal mengunduh data', 'error');
+  }
+}
+
+async function eksporProdukCSV() {
+  showToast('Mengunduh data produk...');
+  try {
+    const res = await fetch('/api/produk/?all=1');
+    const data = await res.json();
+    let csv = 'Kode,Nama,Kategori,Satuan,Harga Beli,Harga Jual,Stok,Min Stok\n';
+    data.produk.forEach(p => {
+      csv += `"${p.kode}","${p.nama}","${p.kategori}","${p.satuan || ''}",${p.harga_beli || 0},${p.harga},${p.stok},${p.stok_min || 0}\n`;
+    });
+    downloadCSV(csv, 'produk_' + new Date().toISOString().slice(0,10) + '.csv');
+    showToast('Data produk berhasil diunduh!');
+  } catch(e) {
+    showToast('Gagal mengunduh data', 'error');
+  }
+}
+
+function downloadCSV(csv, filename) {
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+async function resetDataTrx() {
+  if (!confirm('⚠️ PERINGATAN!\n\nSemua data transaksi akan dihapus permanen.\nStok produk TIDAK akan dikembalikan.\n\nKetik "RESET" untuk konfirmasi:')) return;
+  const konfirmasi = prompt('Ketik RESET untuk melanjutkan:');
+  if (konfirmasi !== 'RESET') { showToast('Reset dibatalkan', 'error'); return; }
+  const res = await fetch('/api/reset-transaksi/', { method: 'POST', headers: { 'X-CSRFToken': CSRF, 'Content-Type': 'application/json' } });
+  const d = await res.json();
+  if (d.ok) { showToast('Semua data transaksi telah direset'); }
+  else showToast(d.error || 'Gagal reset', 'error');
+}
+</script>
+{% endblock %}

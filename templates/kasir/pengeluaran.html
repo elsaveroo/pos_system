@@ -1,0 +1,136 @@
+{% extends 'kasir/base.html' %}
+{% block title %}Pengeluaran Toko{% endblock %}
+{% block page_title %}Pengeluaran Toko{% endblock %}
+{% block page_sub %}Catat dan kelola pengeluaran operasional{% endblock %}
+{% block content %}{% with active='pengeluaran' %}
+<div class="inner-page">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:10px">
+    <div></div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-outline" onclick="cetakPengeluaran()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>Cetak Pengeluaran</button>
+      <button class="btn btn-primary" onclick="openModal('addPengModal')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Tambah Pengeluaran</button>
+    </div>
+  </div>
+
+  <div style="background:var(--danger-light);border:1px solid #fca5a5;border-radius:12px;padding:16px 20px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center">
+    <div><div style="font-size:13px;color:var(--danger);font-weight:600">Total pengeluaran</div><div style="font-size:22px;font-weight:800;color:var(--danger)">Rp {{ total|floatformat:0 }}</div></div>
+    <div style="font-size:13px;color:var(--danger);font-weight:600">{{ jumlah }} Pengeluaran tercatat</div>
+  </div>
+
+  <form method="get" style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;align-items:center">
+    <select class="form-control" style="width:auto" name="kategori" onchange="this.form.submit()">
+      <option value="">Semua kategori</option>
+      {% for k in kategori_list %}
+      <option value="{{ k.id }}" {% if kat_filter == k.id|stringformat:"s" %}selected{% endif %}>{{ k.nama }}</option>
+      {% endfor %}
+    </select>
+    <input class="form-control" type="date" name="tgl_dari" value="{{ tgl_dari }}" placeholder="Dari tanggal" style="width:150px">
+    <input class="form-control" type="date" name="tgl_sampai" value="{{ tgl_sampai }}" placeholder="Sampai tanggal" style="width:150px">
+    <button type="submit" class="btn btn-outline"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>Filter</button>
+    <div class="search-box" style="flex:1;min-width:200px;margin:0">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input type="text" name="q" id="searchPeng" placeholder="Cari deskripsi pengeluaran..." value="{{ search }}">
+    </div>
+  </form>
+
+  <div class="card">
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Tanggal</th><th>Kategori pengeluaran</th><th>Deskripsi</th><th>Nominal</th><th>Pengguna</th><th>Aksi</th></tr></thead>
+        <tbody id="pengBody">
+          {% for p in pengeluaran_list %}
+          <tr data-desc="{{ p.deskripsi|lower }}">
+            <td>{{ p.tanggal|date:"d/m/Y H:i" }}</td>
+            <td>{% if p.kategori %}
+              <span class="badge {% if p.kategori.warna == 'orange' %}badge-orange{% elif p.kategori.warna == 'green' %}badge-green{% elif p.kategori.warna == 'purple' %}badge-purple{% elif p.kategori.warna == 'red' %}badge-red{% elif p.kategori.warna == 'yellow' %}badge-yellow{% else %}badge-blue{% endif %}">{{ p.kategori.nama }}</span>
+            {% else %}-{% endif %}</td>
+            <td>{{ p.deskripsi }}</td>
+            <td style="color:var(--danger);font-weight:700">Rp {{ p.nominal|floatformat:0 }}</td>
+            <td>{{ p.dicatat_oleh.get_full_name|default:p.dicatat_oleh.username|default:"Owner" }}</td>
+            <td style="display:flex;gap:4px">
+              <button class="icon-btn" title="Edit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+              <button class="icon-btn danger" onclick="delPeng({{ p.id }},this)" title="Hapus"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a1 1 0 011-1h4a1 1 0 011 1v2"/></svg></button>
+            </td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="6" style="text-align:center;color:var(--text-muted);padding:30px">Belum ada pengeluaran</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div style="padding:10px 16px"><span class="pg-info">Menampilkan {{ pengeluaran_list|length }} data</span></div>
+  </div>
+</div>
+
+<!-- ADD MODAL -->
+<div class="modal-overlay" id="addPengModal" onclick="closeIfOut(event,'addPengModal')">
+  <div class="modal" style="max-width:480px">
+    <div class="modal-hdr"><h3>Tambah Pengeluaran Baru</h3>
+      <button class="modal-close" onclick="closeModal('addPengModal')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <p style="font-size:12.5px;color:var(--text-muted);margin-bottom:16px">Catat pengeluaran operasional toko</p>
+    <form id="formPeng" enctype="multipart/form-data">
+      {% csrf_token %}
+      <div class="form-group"><label class="form-label">Tanggal <span class="req">*</span></label><input class="form-control" type="date" name="tanggal" required></div>
+      <div class="form-group"><label class="form-label">Kategori <span class="req">*</span></label>
+        <select class="form-control" name="kategori" required>
+          <option value="">Pilih kategori</option>
+          {% for k in kategori_list %}<option value="{{ k.id }}">{{ k.nama }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">Deskripsi (opsional)</label><textarea class="form-control" name="deskripsi" placeholder="Deskripsi singkat barang (opsional)" style="min-height:80px"></textarea></div>
+      <div class="form-group"><label class="form-label">Nominal pengeluaran (Rp) <span class="req">*</span></label><input class="form-control" type="number" name="nominal" placeholder="Rp 0" required></div>
+      <div class="form-group"><label class="form-label">Lampiran (opsional)</label>
+        <div class="upload-area" onclick="document.getElementById('lampiran').click()">
+          <div class="upload-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div>
+          <div class="upload-info">Klik untuk upload<br>Format: JPG, PNG, atau PDF<br>Ukuran maksimal: 2MB</div>
+        </div>
+        <input type="file" id="lampiran" name="lampiran" accept=".jpg,.jpeg,.png,.pdf" style="display:none">
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn-so" onclick="closeModal('addPengModal')">Batal</button>
+        <button type="button" class="btn-sp" onclick="submitPeng()">Simpan</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endwith %}{% endblock %}
+{% block extra_js %}
+<script>
+const CSRF='{{ csrf_token }}';
+function closeModal(id){document.getElementById(id).classList.remove('show');}
+function openModal(id){document.getElementById(id).classList.add('show');}
+function closeIfOut(e,id){if(e.target.id===id)closeModal(id);}
+
+function filterPeng(){
+  const q=document.getElementById('searchPeng').value.toLowerCase();
+  document.querySelectorAll('#pengBody tr[data-desc]').forEach(r=>{
+    r.style.display=r.dataset.desc.includes(q)?'':'none';
+  });
+}
+
+async function submitPeng(){
+  const form=document.getElementById('formPeng');
+  const fd=new FormData(form);
+  const res=await fetch('/api/pengeluaran/tambah/',{method:'POST',body:fd,headers:{'X-CSRFToken':CSRF}});
+  const d=await res.json();
+  if(d.ok){showToast('Pengeluaran berhasil ditambahkan');closeModal('addPengModal');location.reload();}
+  else showToast(d.error||'Gagal','error');
+}
+
+async function delPeng(id,btn){
+  if(!confirmDel('Hapus pengeluaran ini?'))return;
+  const res=await fetch('/api/pengeluaran/hapus/'+id+'/',{method:'DELETE',headers:{'X-CSRFToken':CSRF}});
+  const d=await res.json();
+  if(d.ok){btn.closest('tr').remove();showToast('Pengeluaran dihapus');}
+  else showToast(d.error||'Gagal','error');
+}
+function cetakPengeluaran() { window.print(); }
+function filterPeng() {
+  const q = document.getElementById('searchPeng').value.toLowerCase();
+  document.querySelectorAll('#pengBody tr').forEach(r => {
+    r.style.display = !q || r.dataset.desc.includes(q) ? '' : 'none';
+  });
+}
+</script>
+{% endblock %}

@@ -1,0 +1,873 @@
+{% extends 'kasir/base.html' %}
+{% load static %}
+{% block title %}Kasir – {{ setting.nama_toko }}{% endblock %}
+{% block page_title %}Kasir{% endblock %}
+{% block page_sub %}{{ setting.nama_toko }}{% endblock %}
+
+{% block extra_css %}
+<style>
+/* ── Override page-content agar kasir bisa flex full height ── */
+.page-content { padding: 0 !important; overflow: hidden; display: flex; }
+
+/* ── Kasir Layout: kiri produk, kanan sidebar ── */
+.kasir-wrap {
+  display: flex;
+  flex: 1;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* ── Kiri: area produk ── */
+.kasir-products {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--bg);
+}
+.kasir-products-top {
+  padding: 16px 18px 0;
+  flex-shrink: 0;
+  background: var(--bg);
+}
+.kasir-products-grid {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 18px 18px;
+}
+
+/* ── Kanan: ringkasan pembayaran ── */
+.kasir-pay {
+  width: 310px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--card-bg);
+  border-left: 1px solid var(--border);
+  overflow: hidden;
+}
+.kasir-pay-header {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+.kasir-pay-header h2 { font-size: 14px; font-weight: 700; }
+.kasir-cart-area {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 14px;
+  min-height: 0;
+}
+.kasir-totals {
+  padding: 12px 14px;
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+  background: var(--card-bg);
+}
+
+/* ── Filter tabs (scrollable) ── */
+.cat-tabs {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding-bottom: 10px;
+  scrollbar-width: none;
+}
+.cat-tabs::-webkit-scrollbar { display: none; }
+.cat-tab {
+  flex-shrink: 0;
+  padding: 5px 14px;
+  border-radius: 20px;
+  border: 1.5px solid var(--border);
+  background: var(--card-bg);
+  color: var(--text-muted);
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all .15s;
+  white-space: nowrap;
+}
+.cat-tab:hover { border-color: var(--primary); color: var(--primary); }
+.cat-tab.active { background: var(--primary); border-color: var(--primary); color: #fff; font-weight: 600; }
+
+/* ── Product grid ── */
+.pgrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(155px, 1fr));
+  gap: 10px;
+}
+.pcard {
+  background: var(--card-bg);
+  border: 1.5px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: transform .15s, box-shadow .15s, border-color .15s;
+  user-select: none;
+}
+.pcard:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(0,0,0,.1); border-color: var(--primary); }
+.pcard.habis { cursor: not-allowed; opacity: .55; }
+.pcard.habis:hover { transform: none; box-shadow: none; border-color: var(--border); }
+.pcard-img {
+  position: relative;
+  height: 110px;
+  background: var(--bg);
+  overflow: hidden;
+}
+.pcard-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.pcard-img-ph {
+  width: 100%; height: 100%;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--text-muted); opacity: .5;
+}
+.pcard-img-ph svg { width: 32px; height: 32px; }
+.kat-badge {
+  position: absolute; top: 6px; left: 6px;
+  background: var(--primary); color: #fff;
+  font-size: 9px; font-weight: 700;
+  padding: 2px 7px; border-radius: 20px;
+}
+.stok-badge {
+  position: absolute; top: 6px; right: 6px;
+  font-size: 9px; font-weight: 700;
+  padding: 2px 7px; border-radius: 20px;
+}
+.stok-badge.habis { background: var(--danger); color: #fff; }
+.stok-badge.rendah { background: var(--warning); color: #fff; }
+.pcard-body { padding: 9px 11px; }
+.pcard-name { font-weight: 600; font-size: 12px; line-height: 1.3; margin-bottom: 2px; }
+.pcard-code { font-size: 10px; color: var(--text-muted); margin-bottom: 8px; }
+.pcard-footer { display: flex; align-items: center; justify-content: space-between; }
+.pcard-price { font-weight: 800; font-size: 12.5px; color: var(--primary); }
+.pcard-stok { font-size: 10px; color: var(--text-muted); margin-top: 1px; font-weight: 500; }
+.pcard-stok.stok-habis { color: var(--danger); font-weight: 700; }
+.pcard-stok.stok-warn  { color: #d97706; font-weight: 700; }
+.pcard-add {
+  width: 26px; height: 26px; border-radius: 7px;
+  background: var(--primary); color: #fff; border: none;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0; transition: background .15s;
+}
+.pcard-add svg { width: 14px; height: 14px; }
+.pcard-add:hover { background: var(--primary-dark); }
+.pcard-add:disabled { background: var(--border); cursor: not-allowed; }
+
+/* ── Cart items ── */
+.cart-empty-state {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: 32px 16px; color: var(--text-muted); text-align: center; gap: 8px;
+}
+.cart-empty-state svg { width: 42px; height: 42px; opacity: .3; }
+.cart-empty-state p { font-size: 12.5px; }
+.citem {
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: 10px; padding: 10px 11px; margin-bottom: 8px;
+}
+.citem-name { font-weight: 600; font-size: 12.5px; margin-bottom: 7px; }
+.citem-row { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.citem-price { font-size: 11px; color: var(--text-muted); }
+.citem-sub { font-weight: 700; font-size: 12px; color: var(--primary); }
+.citem-ctrl { display: flex; align-items: center; gap: 4px; }
+.qbtn {
+  width: 22px; height: 22px; border-radius: 6px;
+  border: 1.5px solid var(--border); background: var(--card-bg);
+  color: var(--text); font-size: 13px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center; cursor: pointer;
+}
+.qbtn:hover { border-color: var(--primary); color: var(--primary); }
+.qbtn:disabled { opacity: .4; cursor: not-allowed; }
+.qnum { font-weight: 700; font-size: 12px; min-width: 18px; text-align: center; }
+.qrem {
+  background: none; border: none; cursor: pointer;
+  color: var(--danger); opacity: .55; padding: 2px; display: flex;
+}
+.qrem:hover { opacity: 1; }
+.qrem svg { width: 13px; height: 13px; }
+
+/* ── Totals section ── */
+.tot-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-size: 12.5px; }
+.tot-lbl { color: var(--text-muted); }
+.tot-val { font-weight: 600; }
+.disc-flex { display: flex; align-items: center; gap: 5px; margin-bottom: 8px; }
+.disc-flex label { font-size: 12px; color: var(--text-muted); flex-shrink: 0; }
+.disc-select {
+  padding: 4px 6px; border: 1px solid var(--border); border-radius: 6px;
+  background: var(--card-bg); color: var(--text); font-size: 12px; outline: none;
+}
+.disc-input {
+  flex: 1; padding: 4px 8px; border: 1px solid var(--border); border-radius: 6px;
+  background: var(--card-bg); color: var(--text); font-size: 12px; outline: none; min-width: 0;
+}
+.disc-input:focus { border-color: var(--primary); }
+.ppn-flex { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.ppn-left2 { display: flex; align-items: center; gap: 8px; font-size: 12.5px; }
+.sep-line { height: 1px; background: var(--border); margin: 8px 0; }
+.grand-flex { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+.grand-label { font-size: 12.5px; color: var(--text-muted); }
+.grand-amount { font-size: 20px; font-weight: 800; color: var(--primary); }
+.pay-method-label { font-size: 11px; color: var(--text-muted); margin-bottom: 6px; text-transform: uppercase; letter-spacing: .04em; font-weight: 600; }
+.pm-btns { display: flex; gap: 4px; margin-bottom: 10px; }
+.pm-btn {
+  flex: 1; padding: 7px 4px; border-radius: 7px;
+  border: 1.5px solid var(--border); background: var(--card-bg);
+  color: var(--text-muted); font-size: 11px; font-weight: 500;
+  display: flex; align-items: center; justify-content: center; gap: 3px; cursor: pointer; transition: all .15s;
+}
+.pm-btn svg { width: 13px; height: 13px; }
+.pm-btn:hover { border-color: var(--primary); color: var(--primary); }
+.pm-btn.active { border-color: var(--primary); background: var(--primary-light); color: var(--primary); font-weight: 700; }
+.act-btns { display: flex; flex-direction: column; gap: 6px; }
+.btn-bayar {
+  padding: 11px; border-radius: 10px; background: var(--primary); color: #fff;
+  border: none; font-size: 13.5px; font-weight: 700; cursor: pointer; transition: background .15s;
+}
+.btn-bayar:hover { background: var(--primary-dark); }
+.btn-bayar:disabled { background: var(--border); color: var(--text-muted); cursor: not-allowed; }
+.btn-hapus {
+  padding: 9px; border-radius: 10px; background: var(--card-bg);
+  color: var(--danger); border: 1.5px solid var(--danger);
+  font-size: 12px; font-weight: 600; cursor: pointer; transition: all .15s;
+  display: flex; align-items: center; justify-content: center; gap: 5px;
+}
+.btn-hapus:hover { background: var(--danger-light); }
+.btn-hapus svg { width: 13px; height: 13px; }
+
+/* ── Responsive ── */
+@media (max-width: 900px) {
+  .kasir-wrap { flex-direction: column; overflow-y: auto; }
+  .kasir-products { overflow: visible; height: auto; min-height: 50vh; }
+  .kasir-products-grid { overflow: visible; }
+  .kasir-pay { width: 100%; border-left: none; border-top: 2px solid var(--border); max-height: none; }
+  .kasir-cart-area { max-height: 280px; }
+  .page-content { overflow-y: auto; }
+  .grand-amount { font-size: 18px; }
+}
+@media (max-width: 600px) {
+  .pgrid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+  .kasir-products-top { padding: 10px 10px 0; }
+  .kasir-products-grid { padding: 8px 10px; }
+  .kasir-pay { width: 100%; }
+  .pcard-name { font-size: 11.5px; }
+  .pcard-price { font-size: 12px; }
+  .pcard-img { height: 90px; }
+  .kasir-pay-header h2 { font-size: 13px; }
+  .btn-bayar { padding: 13px; font-size: 14px; }
+  .pm-btn { padding: 8px 2px; font-size: 10.5px; }
+  .act-btns { gap: 8px; }
+}
+@media (max-width: 400px) {
+  .pgrid { grid-template-columns: repeat(2, 1fr); gap: 6px; }
+  .kasir-totals { padding: 10px; }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="kasir-wrap">
+
+  <!-- ══ KIRI: PRODUK ══════════════════════════════════════════ -->
+  <div class="kasir-products">
+
+    <!-- Search -->
+    <div class="kasir-products-top">
+      <div class="search-box" style="margin-bottom:10px">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input type="text" id="cariInput" placeholder="Cari produk... (F2)" oninput="doFilter()" autocomplete="off">
+      </div>
+      <!-- Kategori tabs -->
+      <div class="cat-tabs" id="catTabs">
+        <button class="cat-tab active" data-kat="">Semua</button>
+        {% for k in kategori_list %}
+        <button class="cat-tab" data-kat="{{ k.id }}">{{ k.nama }}</button>
+        {% endfor %}
+      </div>
+    </div>
+
+    <!-- Product grid -->
+    <div class="kasir-products-grid">
+      <div class="pgrid" id="pgrid">
+        {% for p in produk_list %}
+        <div class="pcard {% if p.stok == 0 %}habis{% endif %}"
+             data-id="{{ p.id }}"
+             data-nama="{{ p.nama|lower }}"
+             data-kat="{{ p.kategori_id|default:'' }}"
+             data-harga="{{ p.harga_jual|floatformat:0 }}"
+             data-stok="{{ p.stok }}"
+             data-label="{{ p.nama }}"
+             onclick="kartuKlik(this)">
+          <div class="pcard-img">
+            {% if p.gambar %}
+              <img src="{{ p.gambar.url }}" alt="{{ p.nama }}" loading="lazy">
+            {% else %}
+              <div class="pcard-img-ph">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+              </div>
+            {% endif %}
+            {% if p.kategori %}<span class="kat-badge">{{ p.kategori.nama }}</span>{% endif %}
+            {% if p.stok == 0 %}
+              <span class="stok-badge habis">Habis</span>
+            {% elif p.stok_rendah %}
+              <span class="stok-badge rendah">Rendah</span>
+            {% endif %}
+          </div>
+          <div class="pcard-body">
+            <div class="pcard-name">{{ p.nama }}</div>
+            <div class="pcard-code">{{ p.kode }}</div>
+            <div class="pcard-footer">
+              <div>
+                <div class="pcard-price">Rp {{ p.harga_jual|floatformat:0 }}</div>
+                <div class="pcard-stok {% if p.stok == 0 %}stok-habis{% elif p.stok_rendah %}stok-warn{% endif %}">
+                  {% if p.stok == 0 %}⚠ Habis{% elif p.stok_rendah %}⚠ Stok: {{ p.stok }}{% else %}Stok: {{ p.stok }}{% endif %}
+                </div>
+              </div>
+              <button class="pcard-add"
+                      onclick="event.stopPropagation(); tambahKeranjang(this.closest('.pcard'))"
+                      {% if p.stok == 0 %}disabled{% endif %}>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+        {% empty %}
+        <div style="grid-column:1/-1;text-align:center;padding:50px 20px;color:var(--text-muted)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:48px;height:48px;opacity:.3;margin-bottom:12px"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/></svg>
+          <div style="font-weight:600;margin-bottom:4px">Belum ada produk</div>
+          <div style="font-size:12px">Tambah produk di menu <a href="{% url 'barang_stok' %}" style="color:var(--primary)">Barang &amp; Stok</a></div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ KANAN: RINGKASAN PEMBAYARAN ══════════════════════════ -->
+  <div class="kasir-pay">
+    <div class="kasir-pay-header">
+      <h2>Ringkasan Pembayaran</h2>
+      <span id="itemBadge" style="display:none;background:var(--primary);color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px">0 item</span>
+    </div>
+
+    <!-- Cart items -->
+    <div class="kasir-cart-area" id="cartArea">
+      <div class="cart-empty-state" id="cartKosong">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 001.99 1.61h9.72a2 2 0 001.99-1.61L23 6H6"/></svg>
+        <p>Keranjang masih kosong<br><small>Klik produk untuk menambah</small></p>
+      </div>
+      <div id="cartList"></div>
+    </div>
+
+    <!-- Totals -->
+    <div class="kasir-totals">
+      <div class="tot-row">
+        <span class="tot-lbl">Sub total</span>
+        <span class="tot-val" id="valSubTotal">Rp 0</span>
+      </div>
+      <div class="disc-flex">
+        <label>Diskon</label>
+        <select class="disc-select" id="discType" onchange="hitungTotal()">
+          <option value="persen">%</option>
+          <option value="nominal">Rp</option>
+        </select>
+        <input class="disc-input" type="number" id="discVal" value="0" min="0" oninput="hitungTotal()">
+      </div>
+      <div class="ppn-flex">
+        <div class="ppn-left2">
+          <span style="font-size:12.5px">PPN {{ setting.ppn_persen|floatformat:0 }}%</span>
+          <button class="ppn-tog {% if setting.ppn_aktif %}on{% else %}off{% endif %}" id="ppnToggle" onclick="togglePPN()"></button>
+        </div>
+        <span id="valPPN" style="font-size:12.5px;font-weight:600">Rp 0</span>
+      </div>
+      <div class="sep-line"></div>
+      <div class="grand-flex">
+        <span class="grand-label">Total Pembayaran</span>
+        <span class="grand-amount" id="valTotal">Rp 0</span>
+      </div>
+      <div class="pay-method-label">Metode Bayar</div>
+      <div class="pm-btns">
+        <button class="pm-btn active" data-metode="tunai" onclick="pilihMetode('tunai',this)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>Tunai
+        </button>
+        <button class="pm-btn" data-metode="qris" onclick="pilihMetode('qris',this)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="3" height="3"/></svg>QRIS
+        </button>
+        <button class="pm-btn" data-metode="debit" onclick="pilihMetode('debit',this)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>Debit
+        </button>
+      </div>
+      <div class="act-btns">
+        <button class="btn-bayar" id="btnBayar" onclick="bukaBayarModal()" disabled>
+          Bayar (F9)
+        </button>
+        <button class="btn-hapus" onclick="hapusKeranjang()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a1 1 0 011-1h4a1 1 0 011 1v2"/></svg>
+          Kosongkan
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ MODAL PEMBAYARAN ════════════════════════════════════════════ -->
+<div class="modal-overlay" id="modalBayar" onclick="tutupJikaLuar(event,'modalBayar')">
+  <div class="modal" style="max-width:460px">
+    <div class="modal-hdr">
+      <h3>Proses Pembayaran</h3>
+      <button class="modal-close" onclick="tutupModal('modalBayar')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+
+    <div style="background:var(--primary-light);border-radius:10px;padding:14px 16px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center">
+      <span style="font-size:13px;color:var(--primary);font-weight:600">Total Pembayaran</span>
+      <span style="font-size:22px;font-weight:800;color:var(--primary)" id="mTotal">Rp 0</span>
+    </div>
+
+    <div style="font-size:12px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Metode Bayar</div>
+    <div class="modal-m-btns" style="margin-bottom:14px">
+      <button class="mmbtn active" onclick="setMModalMetode('tunai',this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>Tunai
+      </button>
+      <button class="mmbtn" onclick="setMModalMetode('qris',this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>QRIS
+      </button>
+      <button class="mmbtn" onclick="setMModalMetode('debit',this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>Debit
+      </button>
+    </div>
+
+    <div id="seksiBayarTunai">
+      <div style="font-size:12px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Jumlah Dibayar</div>
+      <input class="modal-input" type="number" id="inputBayar" placeholder="Masukkan nominal..." oninput="hitungKembalian()">
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;margin-bottom:4px">
+        <button class="qamt" onclick="isiAmt(10000)">10rb</button>
+        <button class="qamt" onclick="isiAmt(20000)">20rb</button>
+        <button class="qamt" onclick="isiAmt(50000)">50rb</button>
+        <button class="qamt" onclick="isiAmt(100000)">100rb</button>
+        <button class="qamt" onclick="isiAmt(200000)">200rb</button>
+        <button class="qamt" style="background:var(--primary);color:#fff;border-color:var(--primary)" onclick="isiPas()">Pas</button>
+      </div>
+    </div>
+
+    <div id="seksiQRIS" style="display:none" class="nontunai-wrap">
+      <div class="nontunai-info" style="margin-bottom:12px">📱 <strong>Pembayaran QRIS</strong> — Tunjukkan QR code berikut ke pelanggan untuk di-scan</div>
+      <div id="qrisImgWrap" style="text-align:center;margin-bottom:12px">
+        {% if setting.qris_image %}
+          <img src="{{ setting.qris_image.url }}" id="qrisImg"
+               style="max-width:220px;width:100%;border-radius:12px;border:2px solid var(--border);padding:8px;background:#fff">
+        {% else %}
+          <div style="background:var(--bg);border:2px dashed var(--border);border-radius:12px;padding:24px;text-align:center;color:var(--text-muted)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:48px;height:48px;opacity:.4;margin-bottom:8px;display:block;margin:0 auto 8px">
+              <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="3" height="3"/>
+            </svg>
+            <div style="font-size:12.5px;font-weight:600">QR Code belum diupload</div>
+            <a href="/pengaturan/?tab=profil" style="font-size:12px;color:var(--primary)">Upload di Pengaturan → Profil Toko</a>
+          </div>
+        {% endif %}
+      </div>
+      <div style="background:var(--success-light);border-radius:8px;padding:10px 12px;font-size:12.5px;color:#065f46;text-align:center">
+        ✅ Setelah pelanggan scan & bayar, klik <strong>Simpan</strong> untuk konfirmasi
+      </div>
+    </div>
+    <div id="seksiDebit" style="display:none" class="nontunai-wrap">
+      <div style="text-align:center;padding:8px 0 12px">
+        <svg viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="1.5" style="width:52px;height:52px;margin-bottom:8px">
+          <rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/>
+        </svg>
+        <div style="font-size:14px;font-weight:700;color:var(--primary);margin-bottom:4px">Pembayaran Kartu Debit</div>
+        <div style="font-size:12.5px;color:var(--text-muted)">Minta pelanggan untuk menggesek / tap kartu di mesin EDC</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px;margin-top:4px">
+        <div style="background:var(--bg);border-radius:8px;padding:10px 12px;font-size:12.5px;display:flex;align-items:center;gap:8px">
+          <span style="font-size:16px">1️⃣</span> Minta pelanggan gesek / tap kartu di mesin EDC
+        </div>
+        <div style="background:var(--bg);border-radius:8px;padding:10px 12px;font-size:12.5px;display:flex;align-items:center;gap:8px">
+          <span style="font-size:16px">2️⃣</span> Masukkan PIN oleh pelanggan
+        </div>
+        <div style="background:var(--bg);border-radius:8px;padding:10px 12px;font-size:12.5px;display:flex;align-items:center;gap:8px">
+          <span style="font-size:16px">3️⃣</span> Setelah mesin EDC konfirmasi <strong>APPROVED</strong>, klik Simpan
+        </div>
+      </div>
+    </div>
+
+    <div id="boxKembalian" style="display:none;background:var(--success-light);border-radius:10px;padding:12px 14px;margin-top:8px;justify-content:space-between;align-items:center">
+      <span style="font-size:13px;font-weight:600;color:var(--success)">Kembalian</span>
+      <span style="font-size:18px;font-weight:800;color:var(--success)" id="nilaiKembalian">Rp 0</span>
+    </div>
+
+    <div style="display:flex;gap:8px;margin-top:16px">
+      <button class="btn-sp" id="btnSimpanCetak" onclick="prosesBayar(true)" style="flex:1">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;vertical-align:middle"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+        Simpan &amp; Cetak
+      </button>
+      <button class="btn-so" onclick="prosesBayar(false)" style="flex:1">Simpan Saja</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ MODAL SUKSES ════════════════════════════════════════════════ -->
+<div class="modal-overlay" id="modalSukses" onclick="tutupJikaLuar(event,'modalSukses')">
+  <div class="modal" style="max-width:360px;text-align:center">
+    <div style="width:64px;height:64px;background:var(--success-light);border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 16px">
+      <svg viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2.5" style="width:30px;height:30px"><polyline points="20 6 9 17 4 12"/></svg>
+    </div>
+    <h3 style="margin-bottom:6px">Transaksi Berhasil!</h3>
+    <p id="suksesNomor" style="color:var(--text-muted);font-size:13px;margin-bottom:14px"></p>
+    <div id="suksesDetail" style="background:var(--bg);border-radius:10px;padding:14px;text-align:left;font-size:13px;margin-bottom:16px"></div>
+    <div style="display:flex;gap:8px">
+      <button class="btn-so" style="flex:1" onclick="tutupModal('modalSukses')">Tutup</button>
+      <button class="btn-sp" style="flex:1" onclick="cetakResi()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:13px;height:13px;vertical-align:middle"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+        Cetak Resi
+      </button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// ── State ──────────────────────────────────────────────────────────────────
+const PPN   = parseFloat('{{ setting.ppn_persen|default:"11" }}') || 11;
+const CSRF  = '{{ csrf_token }}';
+const TOKO     = '{{ setting.nama_toko|escapejs|default:"Toko" }}';
+const LOGO_URL   = '{% if setting.logo %}{{ setting.logo.url }}{% endif %}';
+const QRIS_IMG   = '{% if setting.qris_image %}{{ setting.qris_image.url }}{% endif %}';
+const CATATAN  = '{{ setting.catatan_struk|escapejs }}';
+let ppnAktif = {{ setting.ppn_aktif|yesno:"true,false"|default:"true" }};
+let metodeBayar = 'tunai';
+let modalMetode = 'tunai';
+let keranjang   = {};   // { id: {id, nama, harga, stok, qty} }
+let activeKat   = '';   // string kat id or ''
+let dataTrxTerakhir = null;
+
+// ── Kategori filter ────────────────────────────────────────────────────────
+document.querySelectorAll('.cat-tab').forEach(btn => {
+  btn.addEventListener('click', function() {
+    document.querySelectorAll('.cat-tab').forEach(b => b.classList.remove('active'));
+    this.classList.add('active');
+    activeKat = this.dataset.kat;
+    doFilter();
+  });
+});
+
+function doFilter() {
+  const q = document.getElementById('cariInput').value.toLowerCase().trim();
+  document.querySelectorAll('.pcard').forEach(card => {
+    const cocoqNama = !q || card.dataset.nama.includes(q);
+    const cocoqKat  = !activeKat || card.dataset.kat === activeKat;
+    card.style.display = (cocoqNama && cocoqKat) ? '' : 'none';
+  });
+}
+
+// ── Tambah ke keranjang ────────────────────────────────────────────────────
+function getCardData(el) {
+  // el = the .pcard div itself, or any child element
+  const card = el.closest ? el.closest('.pcard') : el;
+  // Use a temporary element to decode any HTML entities in the name
+  const tmp = document.createElement('textarea');
+  tmp.innerHTML = card.dataset.label || '';
+  return {
+    id:    parseInt(card.dataset.id),
+    nama:  tmp.value,
+    harga: parseInt(card.dataset.harga),
+    stok:  parseInt(card.dataset.stok),
+  };
+}
+
+function kartuKlik(el) {
+  const d = getCardData(el);
+  if (d.stok <= 0) return;
+  _tambahItem(d.id, d.nama, d.harga, d.stok);
+}
+
+function tambahKeranjang(el) {
+  const d = getCardData(el);
+  if (d.stok <= 0) { showToast('Stok habis!', 'error'); return; }
+  _tambahItem(d.id, d.nama, d.harga, d.stok);
+}
+
+function _tambahItem(id, nama, harga, stok) {
+  if (keranjang[id]) {
+    if (keranjang[id].qty >= stok) { showToast('Stok tidak cukup!', 'error'); return; }
+    keranjang[id].qty++;
+  } else {
+    keranjang[id] = { id, nama, harga, stok, qty: 1 };
+  }
+  showToast(nama + ' ✓', 'success');
+  renderKeranjang();
+}
+
+function ubahQty(id, delta) {
+  if (!keranjang[id]) return;
+  keranjang[id].qty += delta;
+  if (keranjang[id].qty <= 0) delete keranjang[id];
+  renderKeranjang();
+}
+
+function hapusItem(id) { delete keranjang[id]; renderKeranjang(); }
+
+function hapusKeranjang() {
+  if (!Object.keys(keranjang).length) return;
+  if (!confirm('Kosongkan keranjang?')) return;
+  keranjang = {};
+  renderKeranjang();
+}
+
+// ── Render cart ────────────────────────────────────────────────────────────
+function renderKeranjang() {
+  const items = Object.values(keranjang);
+  const kosong = document.getElementById('cartKosong');
+  const list   = document.getElementById('cartList');
+  const badge  = document.getElementById('itemBadge');
+  const btnByr = document.getElementById('btnBayar');
+
+  if (items.length === 0) {
+    kosong.style.display = 'flex';
+    list.innerHTML = '';
+    badge.style.display = 'none';
+    btnByr.disabled = true;
+  } else {
+    kosong.style.display = 'none';
+    const totalQty = items.reduce((s, i) => s + i.qty, 0);
+    badge.style.display = 'inline';
+    badge.textContent = totalQty + ' item';
+    btnByr.disabled = false;
+    list.innerHTML = items.map(it => `
+      <div class="citem">
+        <div class="citem-name">${it.nama}</div>
+        <div class="citem-row">
+          <div>
+            <div class="citem-price">Rp ${it.harga.toLocaleString('id-ID')} &times; ${it.qty}</div>
+            <div class="citem-sub">Rp ${(it.harga * it.qty).toLocaleString('id-ID')}</div>
+          </div>
+          <div class="citem-ctrl">
+            <button class="qbtn" onclick="ubahQty(${it.id},-1)">−</button>
+            <span class="qnum">${it.qty}</span>
+            <button class="qbtn" onclick="ubahQty(${it.id},1)" ${it.qty >= it.stok ? 'disabled' : ''}>+</button>
+            <button class="qrem" onclick="hapusItem(${it.id})">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a1 1 0 011-1h4a1 1 0 011 1v2"/></svg>
+            </button>
+          </div>
+        </div>
+      </div>`).join('');
+  }
+  hitungTotal();
+}
+
+// ── Hitung total ───────────────────────────────────────────────────────────
+function hitungTotal() {
+  const items = Object.values(keranjang);
+  const sub = items.reduce((s, i) => s + i.harga * i.qty, 0);
+  const tipe = document.getElementById('discType').value;
+  const dv   = parseFloat(document.getElementById('discVal').value) || 0;
+  const disc = tipe === 'persen' ? Math.round(sub * dv / 100) : dv;
+  const stlhDisc = Math.max(sub - disc, 0);
+  const ppn  = ppnAktif ? Math.round(stlhDisc * PPN / 100) : 0;
+  const tot  = stlhDisc + ppn;
+
+  document.getElementById('valSubTotal').textContent = fRp(sub);
+  document.getElementById('valPPN').textContent      = fRp(ppn);
+  document.getElementById('valTotal').textContent    = fRp(tot);
+  document.getElementById('mTotal').textContent      = fRp(tot);
+}
+
+function togglePPN() {
+  ppnAktif = !ppnAktif;
+  const btn = document.getElementById('ppnToggle');
+  btn.className = 'ppn-tog ' + (ppnAktif ? 'on' : 'off');
+  hitungTotal();
+}
+
+function pilihMetode(m, btn) {
+  metodeBayar = m;
+  document.querySelectorAll('.pm-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+}
+
+// ── Buka modal bayar ───────────────────────────────────────────────────────
+function bukaBayarModal() {
+  if (!Object.keys(keranjang).length) return;
+  hitungTotal();
+  document.getElementById('inputBayar').value = '';
+  document.getElementById('boxKembalian').style.display = 'none';
+  // Reset modal metode ke tunai
+  document.querySelectorAll('.mmbtn').forEach(b => b.classList.remove('active'));
+  document.querySelector('.mmbtn').classList.add('active');
+  modalMetode = 'tunai';
+  document.getElementById('seksiBayarTunai').style.display = '';
+  document.getElementById('seksiQRIS').style.display       = 'none';
+  document.getElementById('seksiDebit').style.display      = 'none';
+  document.getElementById('inputRefQris') && (document.getElementById('inputRefQris').value = '');
+  document.getElementById('inputNomorKartu') && (document.getElementById('inputNomorKartu').value = '');
+  bukaModal('modalBayar');
+  setTimeout(() => document.getElementById('inputBayar').focus(), 150);
+}
+
+function setMModalMetode(m, btn) {
+  modalMetode = m;
+  document.querySelectorAll('.mmbtn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('seksiBayarTunai').style.display = m === 'tunai' ? '' : 'none';
+  document.getElementById('seksiQRIS').style.display       = m === 'qris'  ? '' : 'none';
+  document.getElementById('seksiDebit').style.display      = m === 'debit' ? '' : 'none';
+  document.getElementById('boxKembalian').style.display    = 'none';
+  if (m === 'debit') setTimeout(() => document.getElementById('inputNomorKartu').focus(), 100);
+  if (m === 'qris')  setTimeout(() => document.getElementById('inputRefQris').focus(), 100);
+}
+
+function isiAmt(n) {
+  document.getElementById('inputBayar').value = n;
+  hitungKembalian();
+}
+
+function isiPas() {
+  const tot = parseInt(document.getElementById('mTotal').textContent.replace(/\D/g, '')) || 0;
+  isiAmt(tot);
+}
+
+function hitungKembalian() {
+  const tot   = parseInt(document.getElementById('mTotal').textContent.replace(/\D/g, '')) || 0;
+  const bayar = parseInt(document.getElementById('inputBayar').value) || 0;
+  const box   = document.getElementById('boxKembalian');
+  if (bayar > 0) {
+    box.style.display = 'flex';
+    const kemb = Math.max(0, bayar - tot);
+    document.getElementById('nilaiKembalian').textContent = fRp(kemb);
+  } else {
+    box.style.display = 'none';
+  }
+}
+
+// ── Proses bayar ───────────────────────────────────────────────────────────
+function getDatTransaksi() {
+  const items = Object.values(keranjang);
+  const sub   = items.reduce((s, i) => s + i.harga * i.qty, 0);
+  const tipe  = document.getElementById('discType').value;
+  const dv    = parseFloat(document.getElementById('discVal').value) || 0;
+  const discN = tipe === 'persen' ? Math.round(sub * dv / 100) : dv;
+  const discP = tipe === 'persen' ? dv : 0;
+  const stlhD = Math.max(sub - discN, 0);
+  const ppn   = ppnAktif ? Math.round(stlhD * PPN / 100) : 0;
+  return { sub, discP, discN, ppn, total: stlhD + ppn };
+}
+
+async function prosesBayar(cetak) {
+  const btnEl = cetak ? document.getElementById('btnSimpanCetak') : event.target;
+  btnEl.disabled = true;
+  const oriHtml = btnEl.innerHTML;
+  btnEl.innerHTML = 'Memproses...';
+
+  const { sub, discP, discN, ppn, total } = getDatTransaksi();
+  const bayar = modalMetode === 'tunai'
+    ? (parseInt(document.getElementById('inputBayar').value) || total)
+    : total;
+
+  try {
+    const res = await fetch('/api/transaksi/simpan/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+      body: JSON.stringify({
+        items: Object.values(keranjang).map(i => ({ id: i.id, jumlah: i.qty })),
+        subtotal: sub, diskon_persen: discP, diskon_nominal: discN,
+        ppn, total, metode_bayar: modalMetode, jumlah_bayar: bayar,
+      }),
+    });
+    const d = await res.json();
+    if (d.ok) {
+      dataTrxTerakhir = {
+        nomor: d.nomor, items: Object.values(keranjang),
+        sub, discN, ppn, total, bayar, kembalian: d.kembalian,
+        metode: modalMetode, toko: TOKO,
+        tanggal: new Date().toLocaleString('id-ID'),
+      };
+      tutupModal('modalBayar');
+      keranjang = {};
+      renderKeranjang();
+      document.getElementById('discVal').value = 0;
+      hitungTotal();
+      tampilSukses(d.nomor, d.kembalian);
+      if (cetak) setTimeout(cetakResi, 300);
+    } else {
+      showToast(d.error || 'Gagal menyimpan transaksi', 'error');
+    }
+  } catch(e) {
+    showToast('Error: ' + e.message, 'error');
+  } finally {
+    btnEl.disabled = false;
+    btnEl.innerHTML = oriHtml;
+  }
+}
+
+function tampilSukses(nomor, kembalian) {
+  document.getElementById('suksesNomor').textContent = 'No. Transaksi: ' + nomor;
+  if (dataTrxTerakhir) {
+    const ml = { tunai:'Tunai', qris:'QRIS', debit:'Debit' };
+    document.getElementById('suksesDetail').innerHTML = `
+      <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+        <span style="color:var(--text-muted)">Total</span>
+        <strong style="color:var(--primary)">${fRp(dataTrxTerakhir.total)}</strong>
+      </div>
+      <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+        <span style="color:var(--text-muted)">Metode</span>
+        <span>${ml[dataTrxTerakhir.metode]||dataTrxTerakhir.metode}</span>
+      </div>
+      ${dataTrxTerakhir.metode==='tunai'?`
+      <div style="display:flex;justify-content:space-between">
+        <span style="color:var(--text-muted)">Kembalian</span>
+        <strong style="color:var(--success)">${fRp(kembalian)}</strong>
+      </div>`:''}`;
+  }
+  bukaModal('modalSukses');
+}
+
+// ── Cetak resi ─────────────────────────────────────────────────────────────
+function cetakResi() {
+  if (!dataTrxTerakhir) return;
+  const d = dataTrxTerakhir;
+  const ml = { tunai:'Tunai', qris:'QRIS', debit:'Debit' };
+  const w = window.open('', '_blank', 'width=400,height=600');
+  if (!w) { showToast('Izinkan pop-up untuk cetak resi', 'error'); return; }
+  w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Resi ${d.nomor}</title>
+<style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Courier New',monospace;font-size:12px;padding:14px;max-width:280px;margin:auto}
+h2{text-align:center;font-size:14px;margin-bottom:2px}.sub{text-align:center;font-size:11px;color:#666;margin-bottom:10px}
+.hr{border:none;border-top:1px dashed #888;margin:8px 0}.item{margin:4px 0}
+.iname{font-weight:700}.irow{display:flex;justify-content:space-between;font-size:11px;color:#555}
+.row{display:flex;justify-content:space-between;margin:3px 0;font-size:12px}
+.bold{font-weight:700;font-size:13px}.green{color:#059669;font-weight:700}
+.foot{text-align:center;margin-top:10px;font-size:11px;color:#666}
+@media print{body{padding:6px}}</style></head><body>
+${LOGO_URL ? `<div style="text-align:center;margin-bottom:6px"><img src="${LOGO_URL}" style="width:60px;height:60px;object-fit:contain;border-radius:8px"></div>` : ''}
+<h2>${d.toko}</h2>
+<div class="sub">No: ${d.nomor}<br>${d.tanggal}</div>
+<hr class="hr">
+${d.items.map(i=>`<div class="item"><div class="iname">${i.nama}</div><div class="irow"><span>${i.qty} × Rp ${i.harga.toLocaleString('id-ID')}</span><span>Rp ${(i.harga*i.qty).toLocaleString('id-ID')}</span></div></div>`).join('')}
+<hr class="hr">
+<div class="row"><span>Sub total</span><span>Rp ${d.sub.toLocaleString('id-ID')}</span></div>
+${d.discN>0?`<div class="row"><span>Diskon</span><span>- Rp ${d.discN.toLocaleString('id-ID')}</span></div>`:''}
+${d.ppn>0?`<div class="row"><span>PPN</span><span>Rp ${d.ppn.toLocaleString('id-ID')}</span></div>`:''}
+<div class="row bold"><span>TOTAL</span><span>Rp ${d.total.toLocaleString('id-ID')}</span></div>
+<hr class="hr">
+<div class="row"><span>${ml[d.metode]||d.metode}</span><span>Rp ${d.bayar.toLocaleString('id-ID')}</span></div>
+${d.metode==='tunai'?`<div class="row green"><span>Kembalian</span><span>Rp ${d.kembalian.toLocaleString('id-ID')}</span></div>`:''}
+<div class="foot">${CATATAN || 'Terima kasih telah berbelanja!'}<br>${d.toko}</div>
+<script>window.onload=()=>window.print()<\/script>
+</body></html>`);
+  w.document.close();
+}
+
+// ── Modal helpers ──────────────────────────────────────────────────────────
+function bukaModal(id)  { document.getElementById(id).classList.add('show'); }
+function tutupModal(id) { document.getElementById(id).classList.remove('show'); }
+function tutupJikaLuar(e, id) { if (e.target.id === id) tutupModal(id); }
+
+// ── Keyboard ───────────────────────────────────────────────────────────────
+document.addEventListener('keydown', e => {
+  if (e.key === 'F2')     { e.preventDefault(); document.getElementById('cariInput').focus(); }
+  if (e.key === 'F9')     { e.preventDefault(); if (!document.getElementById('btnBayar').disabled) bukaBayarModal(); }
+  if (e.key === 'F7')     { e.preventDefault(); document.getElementById('discVal').focus(); }
+  if (e.key === 'Escape') { tutupModal('modalBayar'); tutupModal('modalSukses'); }
+});
+</script>
+{% endblock %}
